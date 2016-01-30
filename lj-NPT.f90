@@ -112,6 +112,7 @@ write(*,'("rDens",15X,1f10.5)') rDens
 
 ! ***** Setup initial sc arrangement *****
 call setup_sc(N, r, rL)
+! Optional check of init conf of sc-lattice
 !call print_InitR(N, r, initSc)
 write(*,'("INITIAL SETUP INTO SC LATTICE DONE")')
 ! compute initial energy
@@ -128,6 +129,7 @@ write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6, vLRC12+vLRC6
 ! Initialize MT PRNG
 call random_setseed(seed)
 write(*,'("Seed",16X,I10)') seed
+! Check the output of PRNG
 write(*,'("-sample output-")')
 call random_number(rnd10)
 do i=1, 10
@@ -143,8 +145,9 @@ do i=1, eqS
     do k=1, N
         call random_number(rnd4)
         !Always select random atom instead of keeping fixed order
-        !call SAmv(N, k, r, rD, rL, rB, lj(1,k), lj(2,k), rnd4, accSAmv)
-        A = 1 + floor(N*rndN(k)) ! floor(N*rnd) maps to 0, N-1
+!call SAmv(N, k, r, rD, rL, rB, lj(1,k), lj(2,k), rnd4, accSAmv)
+        A = min(1 + floor(N*rndN(k)),N)
+        ! floor(N*rnd) maps to 0, N - since rnd is elem of [0,1]
         call SAmv(N, A, r, rD, rL, rB, rCut6, e6, e12, rnd4, accSAmv)
     enddo
     if(mod(i,sclMvRt) .eq. 0) then
@@ -222,6 +225,8 @@ do i=1, prS
             & rDens: ",1f10.5," vir: ",1f10.5," time: ",1f10.5)') i, eTot,&
             & pres, rDens, vir, t1-t0
         call append_r(N, r, confU, rL, eTot, pres)
+        accSAmv  = 0
+        accSclMv = 0
         call CPU_TIME(t0)
     endif    
 enddo
@@ -244,23 +249,16 @@ subroutine SApot(N, A, r, rL, rCut6, e6, e12)
 
     e6  = 0.0d0
     e12 = 0.0d0
-    do i=1, A-1
-        dr  = r(:,i) - r(:,A)
-        dr  = dr - rL*anint(dr/rL)
-        dr6 = DOT_PRODUCT(dr,dr)**3.0d0
-        ! cutoff
-        if(dr6 .lt. rCut6) then
-            e6  = e6  - 1.0d0/dr6
-            e12 = e12 + 1.0d0/(dr6*dr6)
-        endif
-    enddo
-    do i=A+1, N
-        dr  = r(:,i) - r(:,A)
-        dr  = dr - rL*anint(dr/rL)
-        dr6 = DOT_PRODUCT(dr,dr)**3.0d0
-        if(dr6 .lt. rCut6) then
-            e6  = e6  - 1.0d0/dr6
-            e12 = e12 + 1.0d0/(dr6*dr6)
+    do i=1, N
+        if(i .ne. A) then
+            dr  = r(:,i) - r(:,A)
+            dr  = dr - rL*anint(dr/rL)
+            dr6 = DOT_PRODUCT(dr,dr)**3.0d0
+            ! cutoff
+            if(dr6 .lt. rCut6) then
+                e6  = e6  - 1.0d0/dr6
+                e12 = e12 + 1.0d0/(dr6*dr6)
+            endif
         endif
     enddo
     e6  = 4.0d0*e6

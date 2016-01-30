@@ -95,13 +95,6 @@ rB = 1.0d0/rT
 rDens = N/rV
 
 write(*,'("N",19X,I10)') N
-!write(*,'("T [K]",15X,1f10.5)') temp/kToEV
-!write(*,'("T [eV]",15X,1f10.5)') temp
-!write(*,'("Beta [1/eV]",9X,1f10.5)') beta
-!write(*,'("L [Ang]",13X,1f10.5)') L
-!write(*,'("delta [Ang]",9X,1f10.5)') delta
-!write(*,'("sigma [Ang]",9X,1f10.5)') sig
-!write(*,'("epsilon [eV]",8X,1f10.5)') eps
 write(*,'("REDUCED UNITS")')
 write(*,'("rL",18X,1f10.5)') rL
 write(*,'("rCut",16X,1f10.5)') rCut
@@ -112,6 +105,7 @@ write(*,'("rDens",15X,1f10.5)') rDens
 
 ! ***** Setup initial sc arrangement *****
 call setup_sc(N, r, rL)
+! Optional check of init conf of sc-lattice
 !call print_InitR(N, r, initSc)
 write(*,'("INITIAL SETUP INTO SC LATTICE DONE")')
 ! compute initial energy contributions e6 & e12
@@ -123,11 +117,13 @@ vLRC6  = 2.0d0*eLRC6
 vLRC12 = 4.0d0*eLRC12
 eTot = e12+e6 + (eLRC12+eLRC6) ! No double counting coming from ljTot
 write(*,'("init E",14X,1f10.5)') eTot
-write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6, vLRC12+vLRC6
+write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6, &
+    &vLRC12+vLRC6
 
 ! Initialize MT PRNG
 call random_setseed(seed)
 write(*,'("Seed",16X,I10)') seed
+! Check the output of PRNG
 write(*,'("-sample output-")')
 call random_number(rnd10)
 do i=1, 10
@@ -142,9 +138,9 @@ do i=1, eqS
     do k=1, N
         call random_number(rnd4)
         !Always select random atom instead of keeping fixed order
-        !call SAmv(N, k, r, rD, rL, rB, lj(1,k), lj(2,k), rnd4, accSAmv)
+!call SAmv(N, k, r, rD, rL, rB, lj(1,k), lj(2,k), rnd4, accSAmv)
         A = min(1 + floor(N*rndN(k)),N) 
-        ! floor(N*rnd) maps to 0, N-1 -> in exceptionally rare cases to 0-N
+        ! floor(N*rnd) maps to 0, N - since rnd is elem of [0,1]
         call SAmv(N, A, r, rD, rL, rB, rCut6, e6, e12, rnd4, accSAmv)
     enddo
     ! Take EQ values
@@ -152,7 +148,7 @@ do i=1, eqS
         call CPU_TIME(t1)
         eTot = e12+e6 + (eLRC12+eLRC6)
         vir  = virial(N, r, rL, rCut)
-        pres = (dble(N)/rB+vir+vLRC12+vLRC6)/rV !Eq of state + correction
+        pres = (dble(N)/rB+vir+vLRC12+vLRC6)/rV !Eq of state + vir
         write(*,'("EQ STEP: ",I10," E: ",1f20.10," P: ",1f20.10,"&
             & time: ",1f10.5)') i, eTot, pres, t1-t0
         call CPU_TIME(t0)
@@ -182,7 +178,7 @@ do i=1, prS
     call random_number(rndN)
     do k=1, N
         A = min(1 + floor(N*rndN(k)),N) 
-        ! floor(N*rnd) maps to 0, N-1 -> in exceptionally rare cases to 0-N
+        ! floor(N*rnd) maps to 0, N - since rnd is elem of [0,1]
         call random_number(rnd4)
         call SAmv(N, A, r, rD, rL, rB, rCut6, e6, e12, rnd4, accSAmv)
     enddo
@@ -193,7 +189,7 @@ do i=1, prS
         vir  = virial(N, r, rL, rCut)
         pres = (dble(N)/rB+vir+vLRC12+vLRC6)/rV
         write(*,'("PR STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
-            & vir: ",1f10.5," time: ",1f10.5)') i, eTot, pres, vir, t1-t0
+            & vir: ",1f10.5," time: ",1f10.5)') i,eTot,pres,vir,t1-t0
         call append_r(N, r, confU, rL, eTot, pres)
         call CPU_TIME(t0)
     endif    
@@ -379,7 +375,8 @@ subroutine append_r(N, r, unt, rL, E, pres)
     integer :: i
 
     write(unt, *) N
-    write(unt, '("rL= ",1f10.5," E= ",1f10.5," P= ",1f10.5)') rL, E, pres
+    write(unt, '("rL= ",1f10.5," E= ",1f10.5," P= ",1f10.5)') &
+        &rL, E, pres
     do i=1, N
         write(unt, '("Ar ",1F20.10," ",1F20.10," ",1F20.10)') r(:,i) 
     enddo
