@@ -203,7 +203,7 @@ do i=1, prS
     ! Perform MC Step - attempt to Move all @N atoms
     call random_number(rndN)
     do k=1, N
-        A = 1 + floor(N*rndN(k))
+        A = min(1 + floor(N*rndN(k)),N)
         call random_number(rnd4)
         call SAmv(N, A, r, rD, rL, rB, rCut6, e6, e12, rnd4, accSAmv)
     enddo
