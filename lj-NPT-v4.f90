@@ -122,10 +122,9 @@ eLRC6  = -8.0d0*Pi*N*(N/rV)*(1.0d0/(3.0d0*(rCut**3.0d0)))
 eLRC12 = 8.0d0*Pi*N*(N/rV)*(1.0d0/(9.0d0*(rCut**9.0d0)))
 vLRC6  = 2.0d0*eLRC6
 vLRC12 = 4.0d0*eLRC12
-eTot = e12+e6 !+ (eLRC12+eLRC6) ! No double counting coming from ljTot
+eTot = e12+e6 + (eLRC12+eLRC6) ! No double counting coming from ljTot
 write(*,'("init E",14X,1f10.5)') eTot
-write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6,&
-    &vLRC12+vLRC6
+write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6, vLRC12+vLRC6
 
 ! Initialize MT PRNG
 call random_setseed(seed)
@@ -153,20 +152,21 @@ do i=1, eqS
     enddo
     if(mod(i,sclMvRt) .eq. 0) then
         call random_number(rnd2)
-        call sclMv(N, rP, rDV, rnd2, r, e6, e12, rB, rD, rL, rV,&
-            &rDens, accSclMv)
+        call sclMv(N, rP, rDV, rnd2, r, e6, e12, vir6, vir12, eLRC6, &
+            &eLRC12, vLRC6, vLRC12, rB, rD, rL, rV, rCut, rCut6, rDens,&
+            &accSclMv)
     endif
     ! Take EQ values
     if(mod(i,smplRt) .eq. 0) then
         call CPU_TIME(t1)
-        eTot = e12+e6 !+ (eLRC12+eLRC6)
-        !call virial(vir6, vir12, N, r, rL, rCut)
+        eTot = e12+e6 + (eLRC12+eLRC6)
+        call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
-        !vir = vir6+vir12+vLRC12+vLRC6
-        pres = 0.0d0 !vir/rV
+        vir = vir6+vir12+vLRC12+vLRC6
+        pres = vir/rV
         write(*,'("EQ STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
-            & rDens: ",1f10.5," rL: ",1f10.5," time: ",1f10.5)') &
-            &i, eTot, pres, rDens, rL, t1-t0
+            & rDens: ",1f10.5," time: ",1f10.5)') i, eTot, pres, rDens,&
+            & t1-t0
         call CPU_TIME(t0)
     endif
     ! For gas with low density, nearly all moves 
@@ -209,20 +209,21 @@ do i=1, prS
     enddo
     if(mod(i,sclMvRt) .eq. 0) then
         call random_number(rnd2)
-        call sclMv(N, rP, rDV, rnd2, r, e6, e12, rB, rD, rL, rV,&
-            &rDens, accSclMv)
+        call sclMv(N, rP, rDV, rnd2, r, e6, e12, vir6, vir12, eLRC6, &
+            &eLRC12, vLRC6, vLRC12, rB, rD, rL, rV, rCut, rCut6, rDens,&
+            &accSclMv)
     endif
     ! Take PROD values
     if(mod(i,smplRt) .eq. 0) then
         call CPU_TIME(t1)
-        eTot = e12+e6 !+ (eLRC12+eLRC6)
-        !call virial(vir6, vir12, N, r, rL, rCut)
+        eTot = e12+e6 + (eLRC12+eLRC6)
+        call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
-        vir =  0.0d0 !vir6+vir12+vLRC12+vLRC6
+        vir = vir6+vir12+vLRC12+vLRC6
         pres = vir/rV
         write(*,'("PR STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
-            & rDens: ",1f10.5," rL: ",1f10.5," time: ",1f10.5)') &
-            &i, eTot, pres, rDens, rL, t1-t0
+            & rDens: ",1f10.5," vir: ",1f10.5," time: ",1f10.5)') i, eTot,&
+            & pres, rDens, vir, t1-t0
         call append_r(N, r, confU, rL, eTot, pres)
         accSAmv  = 0
         accSclMv = 0
@@ -335,16 +336,17 @@ subroutine SAmv(N, A, r, dlt, rL, rB, rCut6, e6, e12, rnd4, acc)
     endif
 end subroutine SAmv
 
-subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, rB, rD, rL,&
-    &rV, rDens, acc)
+subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, v6, v12, eLRC6, &
+    &eLRC12, vLRC6, vLRC12, rB, rD, rL, rV, rCut, rCut6, rDens, acc)
     implicit none
 
     integer, intent(in) :: N
     real, dimension(2), intent(in) :: rnd2
     real*8, dimension(3,N), intent(inout) :: r
     real*8, intent(in)    :: rDV, ext_p, rB
-    real*8, intent(inout) :: rD, rL, rV, rDens
-    real*8, intent(inout) :: e6, e12
+    real*8, intent(inout) :: rD, rL, rV, rCut, rCut6, rDens
+    real*8, intent(inout) :: e6, e12, v6, v12
+    real*8, intent(inout) :: eLRC6, eLRC12, vLRC6, vLRC12
     integer, intent(inout) :: acc
 
     real*8 :: scl, iscl3, iscl6, delH
@@ -353,27 +355,25 @@ subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, rB, rD, rL,&
 
     iscl6 = scl**(-6.0d0)
     iscl3 = scl**(-3.0d0)
-    ! NPT ensamble is weighted as exp(-beta*(PV+U)+NlogV) 
+    ! NPT ensamble is weighted as exp(-beta*(PV+U)+NlogV)
     delH = (e12*iscl6 + e6)*iscl6 - (e12+e6) + &
         &ext_p*rV*(scl*scl*scl-1.0d0) - real(3*N)*log(scl)/rB
     if(exp(-rB*delH) .gt. rnd2(2)) then
         r=r*scl
-        rL=rL*scl
-        r=r-rL*anint(r/rL) ! Apply PBC wrt new rL
         rD=rD*scl
+        rL=rL*scl
         rV=rV*scl*scl*scl
         rDens=N/rV
-        !We do not scale the cutoff or LRC for energy/virial
-        !rCut=rCut*scl
-        !rCut6=rCut6*(scl**6.0d0)
+        rCut=rCut*scl
+        rCut6=rCut6*(scl**6.0d0)
         e6=e6*iscl6
-        !v6=v6*iscl6
+        v6=v6*iscl6
         e12=e12*iscl6*iscl6
-        !v12=v12*iscl6*iscl6
-        !eLRC6=eLRC6*iscl3
-        !eLRC12=eLRC12*iscl3*iscl6
-        !vLRC6=vLRC6*iscl3
-        !vLRC12=vLRC12*iscl6*iscl3
+        v12=v12*iscl6*iscl6
+        eLRC6=eLRC6*iscl3
+        eLRC12=eLRC12*iscl3*iscl6
+        vLRC6=vLRC6*iscl3
+        vLRC12=vLRC12*iscl6*iscl3
         acc=acc+1
     endif
 
@@ -486,4 +486,4 @@ subroutine virial(v6, v12, N, r, rL, rCut)
             endif
         enddo
     end do
-end subroutine virial
+end subroutine virial 
