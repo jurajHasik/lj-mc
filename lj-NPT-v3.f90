@@ -53,8 +53,8 @@ integer, parameter :: confU = 21
 
 ! ***** Arguments *****
 integer :: numArg, IARGC
-character(len=20) :: argUuid, argN, argT, argrP, argEqS, argPrS
-character(len=20) :: argSmplRt, argSeed
+character(len=20) :: argUuid, argN, argT, argrP, argrL 
+character(len=20) :: argEqS, argPrS, argSmplRt, argSeed
 
 ! ***** Utility variables *****
 integer :: i, k
@@ -63,7 +63,7 @@ real*8 :: t0, t1
 ! ##### SETUP SIMULATION ##############################################
 ! ***** read in variables *****
 numArg = IARGC()
-if(numArg .ne. 8) then
+if(numArg .ne. 9) then
     ! Unique id for output & input files
     write(*,'("Invalid Number of Arguments")')
     call EXIT(0)
@@ -72,13 +72,15 @@ call GETARG(1, argUuid)
 call GETARG(2, argN)
 call GETARG(3, argT) ! read in temperature in Kelvins
 call GETARG(4, argrP) ! read in pressure in LJUnits
-call GETARG(5, argEqS)
-call GETARG(6, argPrS)
-call GETARG(7, argSmplRt)
-call GETARG(8, argSeed)
+call GETARG(5, argrL) 
+call GETARG(6, argEqS)
+call GETARG(7, argPrS)
+call GETARG(8, argSmplRt)
+call GETARG(9, argSeed)
 read(argN, *) N
 read(argT, *) temp
 read(argrP, *) rP
+read(argrL, *) rL ! read initial rL and fix cutoff
 read(argEqS, *) eqS
 read(argPrS, *) prS
 read(argSmplRt, *) smplRt
@@ -89,9 +91,8 @@ allocate(r(3,N), rndN(N))
 rT = temp/eps
 rB = 1.0d0/rT
 
-rV = N*rT/rP ! Assume init volume as the one for ideal gas
-rDens = N/rV 
-rL = rV**(1.0d0/3.0d0)
+rV = rL*rL*rL
+rDens = N/rV
 ! cutoff fixed to L/2
 rCut = rL/2.0d0
 ! we actually only care about a rCut^2
@@ -486,4 +487,4 @@ subroutine virial(v6, v12, N, r, rL, rCut)
             endif
         enddo
     end do
-end subroutine virial
+end subroutine virial 
