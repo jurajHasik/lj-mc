@@ -357,7 +357,7 @@ subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, v6, v12, eLRC6, &
     iscl3 = scl**(-3.0d0)
     ! NPT ensamble is weighted as exp(-beta*(PV+U)+NlogV) 
     delH = (e12*iscl6 + e6)*iscl6 - (e12+e6) + &
-        &ext_p*rV*(scl*scl*scl-1.d0d0) - real(3*N)*log(scl)/rB
+        &ext_p*rV*(scl*scl*scl-1.0d0) - real(3*N)*log(scl)/rB
     if(exp(-rB*delH) .gt. rnd2(2)) then
         r=r*scl
         rD=rD*scl
