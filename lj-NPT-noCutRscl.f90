@@ -1,4 +1,5 @@
 program ljNPT
+! NPT simulation of LJ Gas with cutoff fixed and given as input
 
 use mersenne_twister
 
@@ -53,8 +54,8 @@ integer, parameter :: confU = 21
 
 ! ***** Arguments *****
 integer :: numArg, IARGC
-character(len=20) :: argUuid, argN, argT, argrP, argEqS, argPrS
-character(len=20) :: argSmplRt, argSeed
+character(len=20) :: argUuid, argN, argT, argrP, argrL 
+character(len=20) :: argEqS, argPrS, argSmplRt, argSeed
 
 ! ***** Utility variables *****
 integer :: i, k
@@ -63,7 +64,7 @@ real*8 :: t0, t1
 ! ##### SETUP SIMULATION ##############################################
 ! ***** read in variables *****
 numArg = IARGC()
-if(numArg .ne. 8) then
+if(numArg .ne. 9) then
     ! Unique id for output & input files
     write(*,'("Invalid Number of Arguments")')
     call EXIT(0)
@@ -72,13 +73,15 @@ call GETARG(1, argUuid)
 call GETARG(2, argN)
 call GETARG(3, argT) ! read in temperature in Kelvins
 call GETARG(4, argrP) ! read in pressure in LJUnits
-call GETARG(5, argEqS)
-call GETARG(6, argPrS)
-call GETARG(7, argSmplRt)
-call GETARG(8, argSeed)
+call GETARG(5, argrL) 
+call GETARG(6, argEqS)
+call GETARG(7, argPrS)
+call GETARG(8, argSmplRt)
+call GETARG(9, argSeed)
 read(argN, *) N
 read(argT, *) temp
 read(argrP, *) rP
+read(argrL, *) rL ! read initial rL and fix cutoff
 read(argEqS, *) eqS
 read(argPrS, *) prS
 read(argSmplRt, *) smplRt
@@ -89,9 +92,8 @@ allocate(r(3,N), rndN(N))
 rT = temp/eps
 rB = 1.0d0/rT
 
-rV = N*rT/rP ! Assume init volume as the one for ideal gas
-rDens = N/rV 
-rL = rV**(1.0d0/3.0d0)
+rV = rL*rL*rL
+rDens = N/rV
 ! cutoff fixed to L/2
 rCut = rL/2.0d0
 ! we actually only care about a rCut^2
@@ -122,9 +124,10 @@ eLRC6  = -8.0d0*Pi*N*(N/rV)*(1.0d0/(3.0d0*(rCut**3.0d0)))
 eLRC12 = 8.0d0*Pi*N*(N/rV)*(1.0d0/(9.0d0*(rCut**9.0d0)))
 vLRC6  = 2.0d0*eLRC6
 vLRC12 = 4.0d0*eLRC12
-eTot = e12+e6 + (eLRC12+eLRC6) ! No double counting coming from ljTot
+eTot = e12+e6 !+ (eLRC12+eLRC6) ! No double counting coming from ljTot
 write(*,'("init E",14X,1f10.5)') eTot
-write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6, vLRC12+vLRC6
+write(*,'("E_lrc: ",1f10.5," V_rlc: ",1f10.5)') eLRC12+eLRC6,&
+    &vLRC12+vLRC6
 
 ! Initialize MT PRNG
 call random_setseed(seed)
@@ -163,10 +166,11 @@ do i=1, eqS
         call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
         vir = vir6+vir12+vLRC12+vLRC6
+        !Only contribution from virial since p_ext is fixed
         pres = vir/rV
         write(*,'("EQ STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
-            & rDens: ",1f10.5," time: ",1f10.5)') i, eTot, pres, rDens,&
-            & t1-t0
+            & rDens: ",1f10.5," rL: ",1f10.5," time: ",1f10.5)') &
+            &i, eTot, pres, rDens, rL, t1-t0
         call CPU_TIME(t0)
     endif
     ! For gas with low density, nearly all moves 
@@ -219,11 +223,12 @@ do i=1, prS
         eTot = e12+e6 + (eLRC12+eLRC6)
         call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
-        vir = vir6+vir12+vLRC12+vLRC6
+        vir =  vir6+vir12+vLRC12+vLRC6
+        !Only contribution from virial since p_ext is fixed
         pres = vir/rV
         write(*,'("PR STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
-            & rDens: ",1f10.5," vir: ",1f10.5," time: ",1f10.5)') i, eTot,&
-            & pres, rDens, vir, t1-t0
+            & rDens: ",1f10.5," rL: ",1f10.5," time: ",1f10.5)') &
+            &i, eTot, pres, rDens, rL, t1-t0
         call append_r(N, r, confU, rL, eTot, pres)
         accSAmv  = 0
         accSclMv = 0
@@ -349,31 +354,40 @@ subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, v6, v12, eLRC6, &
     real*8, intent(inout) :: eLRC6, eLRC12, vLRC6, vLRC12
     integer, intent(inout) :: acc
 
-    real*8 :: scl, iscl3, iscl6, delH
+    real*8 :: scl, iscl3, iscl6, delH, 
+    real*8 :: n_rV, n_eLRC6, n_eLRC12
 
-    scl = ((rV + rDV*(rnd2(1)-0.5d0))/rV)**(1.0d0/3.0d0)
+    n_rV = rV + rDV*(rnd2(1)-0.5d0)
+    scl = (n_rV/rV)**(1.0d0/3.0d0)
 
     iscl6 = scl**(-6.0d0)
     iscl3 = scl**(-3.0d0)
+    ! the analytic expression for new eLRC
+    ! eLRC6 = -8.0d0*Pi*N*rDens*(1.0d0/(3.0d0*(rCut**3.0d0)))
+    ! eLRC12 = 8.0d0*Pi*N*rDens*(1.0d0/(9.0d0*(rCut**9.0d0)))
+    ! iscl^3 for rescaled rDens, no-scaling of cutoff
+    n_eLRC6  = eLRC6*iscl3
+    ! iscl^3 for rescaled rDens, no-scaling of cutoff
+    n_eLRC12 = eLRC12*iscl3
+
     ! NPT ensamble is weighted as exp(-beta*(PV+U)+NlogV)
     delH = (e12*iscl6 + e6)*iscl6 - (e12+e6) + &
+        &(n_eLRC12+n_eLRC6) - (eLRC12+eLRC6)+&
         &ext_p*rV*(scl*scl*scl-1.0d0) - real(3*N)*log(scl)/rB
     if(exp(-rB*delH) .gt. rnd2(2)) then
         r=r*scl
         rD=rD*scl
         rL=rL*scl
-        rV=rV*scl*scl*scl
-        rDens=N/rV
-        rCut=rCut*scl
-        rCut6=rCut6*(scl**6.0d0)
+        rV=n_rV
+        rDens=N/n_rV
         e6=e6*iscl6
         v6=v6*iscl6
         e12=e12*iscl6*iscl6
         v12=v12*iscl6*iscl6
-        eLRC6=eLRC6*iscl3
-        eLRC12=eLRC12*iscl3*iscl6
-        vLRC6=vLRC6*iscl3
-        vLRC12=vLRC12*iscl6*iscl3
+        eLRC6  = n_eLRC6
+        eLRC12 = n_eLRC12
+        vLRC6  = 2.0d0*n_eLRC6
+        vLRC12 = 4.0d0*n_eLRC12
         acc=acc+1
     endif
 
