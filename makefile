@@ -16,11 +16,8 @@ lj-nvt-RLX90:
 	gfortran -O3 -o lj-nvt-RLX90.x ranlux.f90 lj-NVT-RLX90.f90
 	rm -f *.mod
 lj-npt:
-	rm -f lj-npt.x
-	gfortran -fno-range-check -O5 -o lj-npt.x MersenneTwister.f90 lj-NPT.f90
-	gfortran -fno-range-check -O5 -o lj-npt-v2.x MersenneTwister.f90 lj-NPT-v2.f90
-	gfortran -fno-range-check -O5 -o lj-npt-v3.x MersenneTwister.f90 lj-NPT-v3.f90
-	gfortran -fno-range-check -O5 -o lj-npt-v4.x MersenneTwister.f90 lj-NPT-v4.f90
+	gfortran -fno-range-check -O5 -o lj-npt-cr.x MersenneTwister.f90 lj-NPT-cutRscl.f90
+	gfortran -fno-range-check -O5 -o lj-npt-ncr.x MersenneTwister.f90 lj-NPT-noCutRscl.f90
 	rm -f *.mod
 lj-npt-I:
 	rm -f lj-npt.x

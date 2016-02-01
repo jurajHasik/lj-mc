@@ -1,4 +1,5 @@
 program ljNPT
+! NPT simulation of LJ Gas with cutoff rescaling
 
 use mersenne_twister
 
@@ -118,8 +119,8 @@ write(*,'("INITIAL SETUP INTO SC LATTICE DONE")')
 ! compute initial energy
 call ljTot(N, r, rL, rCut6, e6, e12)
 ! compute energy LRC
-eLRC6  = -8.0d0*Pi*N*(N/rV)*(1.0d0/(3.0d0*(rCut**3.0d0)))
-eLRC12 = 8.0d0*Pi*N*(N/rV)*(1.0d0/(9.0d0*(rCut**9.0d0)))
+eLRC6  = -8.0d0*Pi*N*rDens*(1.0d0/(3.0d0*(rCut**3.0d0)))
+eLRC12 = 8.0d0*Pi*N*rDens*(1.0d0/(9.0d0*(rCut**9.0d0)))
 vLRC6  = 2.0d0*eLRC6
 vLRC12 = 4.0d0*eLRC12
 eTot = e12+e6 + (eLRC12+eLRC6) ! No double counting coming from ljTot
@@ -163,6 +164,7 @@ do i=1, eqS
         call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
         vir = vir6+vir12+vLRC12+vLRC6
+        !Only contribution from virial since p_ext is fixed
         pres = vir/rV
         write(*,'("EQ STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
             & rDens: ",1f10.5," time: ",1f10.5)') i, eTot, pres, rDens,&
@@ -220,6 +222,7 @@ do i=1, prS
         call virial(vir6, vir12, N, r, rL, rCut)
         !Eq of state + correction
         vir = vir6+vir12+vLRC12+vLRC6
+        !Only contribution from virial since p_ext is fixed
         pres = vir/rV
         write(*,'("PR STEP: ",I10," E: ",1f10.5," P: ",1f10.5,"&
             & rDens: ",1f10.5," vir: ",1f10.5," time: ",1f10.5)') i, eTot,&
@@ -349,32 +352,42 @@ subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, v6, v12, eLRC6, &
     real*8, intent(inout) :: eLRC6, eLRC12, vLRC6, vLRC12
     integer, intent(inout) :: acc
 
-    real*8 :: scl, iscl3, iscl6, delH
+    real*8 :: scl, iscl3, iscl6, delH, 
+    real*8 :: n_rV, n_eLRC6, n_eLRC12
 
-    scl = ((rV + rDV*(rnd2(1)-0.5d0))/rV)**(1.0d0/3.0d0)
+    n_rV = rV + rDV*(rnd2(1)-0.5d0)
+    scl = (n_rV/rV)**(1.0d0/3.0d0)
 
     iscl6 = scl**(-6.0d0)
     iscl3 = scl**(-3.0d0)
+    ! the analytic expression for new eLRC
+    ! eLRC6 = -8.0d0*Pi*N*rDens*(1.0d0/(3.0d0*(rCut**3.0d0)))
+    ! eLRC12 = 8.0d0*Pi*N*rDens*(1.0d0/(9.0d0*(rCut**9.0d0)))
+    ! iscl^3 for rescaled rDens, iscl^3 for rescaled cutoff
+    n_eLRC6  = eLRC6*iscl6
+    ! iscl^3 for rescaled rDens, iscl^9 for rescaled cutoff
+    n_eLRC12 = eLRC12*iscl6*iscl6
+
     ! NPT ensamble is weighted as exp(-beta*(PV+U)+NlogV)
     delH = (e12*iscl6 + e6)*iscl6 - (e12+e6) + &
-        &(eLRC12*iscl6 + eLRC6)*iscl3 - (eLRC12+eLRC6)+&
+        &(n_eLRC12+n_eLRC6) - (eLRC12+eLRC6)+&
         &ext_p*rV*(scl*scl*scl-1.0d0) - real(3*N)*log(scl)/rB
     if(exp(-rB*delH) .gt. rnd2(2)) then
         r=r*scl
         rD=rD*scl
         rL=rL*scl
-        rV=rV*scl*scl*scl
-        rDens=N/rV
+        rV=n_rV
+        rDens=N/n_rV
         rCut=rCut*scl
         rCut6=rCut6*(scl**6.0d0)
         e6=e6*iscl6
         v6=v6*iscl6
         e12=e12*iscl6*iscl6
         v12=v12*iscl6*iscl6
-        eLRC6=eLRC6*iscl3
-        eLRC12=eLRC12*iscl3*iscl6
-        vLRC6=vLRC6*iscl3
-        vLRC12=vLRC12*iscl6*iscl3
+        eLRC6  = n_eLRC6
+        eLRC12 = n_eLRC12
+        vLRC6  = 2.0d0*n_eLRC6
+        vLRC12 = 4.0d0*n_eLRC12
         acc=acc+1
     endif
 
