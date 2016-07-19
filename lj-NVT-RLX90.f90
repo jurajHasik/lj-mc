@@ -24,7 +24,7 @@ real*8, parameter :: accRtSAmv = 0.35d0 ! Desired acceptance rate
 ! Frequency of updating SAmv delta in [MC steps]
 integer, parameter :: SAmvAdjstRt = 100
 integer :: eqS, prS
-integer, parameter :: smplRt = 1
+integer :: smplRt
 
 ! ***** Atom coords *****
 real*8, allocatable, dimension(:,:) :: r
@@ -164,7 +164,7 @@ do i=1, eqS
         endif
 
         accSAmv = 0
-        write(*,'("EQ STEP: ",I10," delta [Ang]: ",1f20.10)') i, delta
+        write(*,'("EQ STEP: ",I10," delta [Ang]: ",1f20.10)') i, rD
     endif
 enddo
 

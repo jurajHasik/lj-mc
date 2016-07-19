@@ -352,7 +352,7 @@ subroutine sclMv(N, ext_p, rDV, rnd2, r, e6, e12, v6, v12, eLRC6, &
     real*8, intent(inout) :: eLRC6, eLRC12, vLRC6, vLRC12
     integer, intent(inout) :: acc
 
-    real*8 :: scl, iscl3, iscl6, delH, 
+    real*8 :: scl, iscl3, iscl6, delH
     real*8 :: n_rV, n_eLRC6, n_eLRC12
 
     n_rV = rV + rDV*(rnd2(1)-0.5d0)
