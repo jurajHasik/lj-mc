@@ -43,3 +43,8 @@ To run: `./rDist.x [Char(20) filename] [Int #Samples] [Real maxR[LJ units]] [Int
 Example: `./rDist.x testRun-conf.xyz 1000 2.5 60`
 
 Computes the radial distribution function from 1000 samples of configuration stored in file `testRun-conf.xyz` with pair separation cutoff set to 2.5 in LJ units with resolution of 60 bins. The result is stored in `rho_r.dat`.
+
+##### References
+\[1\] M. P. Allen and D. J. Tildesley, *Computer simulation of liquids* (Clarendon Press, 1987)
+
+\[2\] D. Frenkel and B. Smit, *Understanding Molecular Simulation: From Algorithms to Applications* (Academic Press, 2001)
